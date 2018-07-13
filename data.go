@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kshedden/hfp/utils"
+	"github.com/brookluers/hfp/utils"
 )
 
 // xws is a structure to manage output processing for one variable.

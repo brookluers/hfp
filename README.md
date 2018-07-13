@@ -1,9 +1,9 @@
---- basic.go ---
+## basic.go ##
 fits the proportional hazards models
 
 
 
---- data.go ---
+## data.go ##
 reads hfdat.gob.gz and creates binary column files
 
 Elix_0, Elix_1... are 0/1 indicator variables for each of the Elixhauser categories
@@ -12,7 +12,7 @@ TG_01, ... drug theraputic group values
 
 time, DOB, gender, etc...
 
---- hfdat.go --- 
+## hfdat.go ## 
 Read from Marketscan, convert go Gob
 
 read the A, O, S, I, F, D files from MarketScan, segmenting by Enrolid (rows sorted by Enrolid then date)
@@ -43,10 +43,10 @@ harvest()
 	
 
 
---- reduce.go ---
+## reduce.go ##
 extracts 20 factors from the procedure codes using SVD
 
---- kshedden/gocols/config repository ---
+## kshedden/gocols/config repository ##
 parse configuration of column-stored compressed data 
 
 e.g. for a given bucket number, return the path to the data in that bucket
@@ -55,10 +55,11 @@ e.g. for a given bucket number, return the path to the data in that bucket
 
 
 
---- utils/defs.go --- 
+## utils/defs.go ## 
 Drec struc represents a single person
      indicator of heart failure
      sex
      elixhauser indicators
      drug group indicators
      procedure codes
+
