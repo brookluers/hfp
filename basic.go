@@ -6,14 +6,17 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/optimize"
+	"gonum.org/v1/gonum/mat"
 
-	"github.com/kshedden/dstream/dstream"
-	"github.com/kshedden/dstream/formula"
-	"github.com/kshedden/duration"
-	"github.com/kshedden/statmodel"
+	"github.com/brookluers/dstream/dstream"
+	"github.com/brookluers/dimred"
+	"github.com/brookluers/dstream/formula"
+	"github.com/brookluers/duration"
+	"github.com/brookluers/statmodel"
 )
 
 var (
@@ -27,7 +30,8 @@ func drugGroupMain(vnames, ee []string) []string {
 		if strings.HasPrefix(x, "TG") {
 			// Omit these very rare categories
 			f := false
-			for _, y := range []int{5, 9, 12, 14, 18, 19, 22, 24} {
+			// BGL (6/21/18) TG_11 and TG_23 had zero variance, try excluding
+			for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
 				if x == fmt.Sprintf("TG_%d", y) {
 					f = true
 				}
@@ -45,7 +49,8 @@ func drugGroupInter(vnames, ee []string) []string {
 		if strings.HasPrefix(x, "TG") {
 			// Omit these very rare categories
 			f := false
-			for _, y := range []int{5, 9, 12, 14, 18, 19, 22, 24} {
+			// BGL (6/21/18) TG_11 and TG_23 had zero variance, try excluding
+			for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
 				if x == fmt.Sprintf("TG_%d", y) {
 					f = true
 				}
@@ -103,7 +108,7 @@ func procGroupInter(vnames, ee []string) []string {
 	return ee
 }
 
-func modeldata(model int) dstream.Dstream {
+func modeldata(model int, fl_fullrank bool, fl_qr bool, ko bool) dstream.Dstream {
 
 	var base = []string{"Age", "Female", "Age*Female"}
 	var ee []string
@@ -139,7 +144,51 @@ func modeldata(model int) dstream.Dstream {
 	fmt.Printf(fml + "\n")
 
 	keep := []string{"Time", "HF", "Weight"}
-	dx := formula.New(fml, data).Keep(keep).Done()
+	// keep variables in dstream but not in formula
+	dx := formula.New(fml, data).Keep(keep).Done() 
+
+	fmt.Printf("\n---Variable names after formula parsing---%v\n\n", dx.Names())
+	
+	if fl_fullrank {
+	   lfn := "log_fr.txt"
+	   if fl_qr {
+	      strings.Replace(lfn, ".txt", "_qr.txt", 1)
+	   }
+
+	   if ko {
+	      strings.Replace(lfn, ".txt", "_ko.txt", 1)
+	   }
+	   var pcheck int
+	   var frcpr []float64
+	   if fl_qr {
+	      fmt.Printf("\n--Finding set of linearly independent columns using rank-revealing QR--\n")
+	      fr := dimred.NewRRQR(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
+	      pcheck = fr.DimCheck()
+	      frcpr = fr.CPR()
+	      dx = fr.Data()
+	   } else {
+	     fmt.Printf("\n--Finding set of linearly independent columns using Cholesky--\n")
+	     fr := dimred.NewFullRank(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
+	     pcheck = fr.DimCheck()
+	     frcpr = fr.CPR()
+	     dx = fr.Data()
+	   }
+	   
+	   gmat := mat.NewDense(pcheck, pcheck, frcpr)
+	   fmt.Printf("Upper corner of Gram matrix: %v\n\n",
+	   		       mat.Formatted(gmat, mat.Prefix(" "), mat.Excerpt(3)))
+	   
+	   var gsvd mat.SVD
+	   ok := gsvd.Factorize(gmat, mat.SVDNone)
+	   if (!ok) {
+	      fmt.Printf("Failed to compute SVD of gram matrix\n")
+	   } else {
+	     fmt.Printf("\nSingular values of gram matrix: %v\n", gsvd.Values(nil))
+	   }
+	   
+	   fmt.Printf("\n    Names of full-rank column set: \n%v\n", dx.Names())
+	}
+
 	da := dstream.MemCopy(dx)
 
 	return da
@@ -152,9 +201,9 @@ type rec struct {
 	kr          *statmodel.KnockoffResult
 }
 
-func ridge(mode int, l2w []float64, ko bool) error {
+func ridge(mode int, l2w []float64, ko bool, fl_fullrank bool, fl_qr bool) error {
 
-	da := modeldata(mode)
+	da := modeldata(mode, fl_fullrank, fl_qr, ko)
 
 	if ko {
 		// Names to knockoff
@@ -167,10 +216,14 @@ func ridge(mode int, l2w []float64, ko bool) error {
 
 		da.Reset()
 		rand.Seed(323849)
-		ko, err := statmodel.NewKnockoff(da, names)
-		if err != nil {
-			return err
-		}
+		//ko, err := statmodel.NewKnockoff(da, names)
+		fmt.Printf("\nCreating Knockoff model with %v variables", len(names))
+		fmt.Printf("\nNames of variables passed to Knockoff: %v\n", names)
+
+		ko := statmodel.NewKnockoff(da, names)
+		// if  err != nil {
+		//	return err
+		// }
 		ko.Reset()
 		da = dstream.MemCopy(ko)
 		fmt.Printf("lmin=%v\n", ko.CrossProdMinEig())
@@ -220,11 +273,17 @@ func ridge(mode int, l2w []float64, ko bool) error {
 			rc <- &rec{c.Concordance(365), w, result, kr}
 		}(w)
 	}
-
-	fname := fmt.Sprintf("coeff_%d.txt", mode)
+	tn := time.Now()
+	ts := tn.Format("Jan2-15-04-05")
+	fname_p := []string{fmt.Sprintf("coeff_%d_", mode), ts, ".txt"}
+	fname := strings.Join(fname_p, "")
 	if ko {
 		fname = strings.Replace(fname, ".txt", "_ko.txt", 1)
 	}
+	if fl_fullrank {
+	   fname = strings.Replace(fname, ".txt", "_fullrank.txt", 1)
+	}
+
 	fid, err := os.Create(fname)
 	if err != nil {
 		panic(err)
@@ -330,10 +389,12 @@ func genvars() {
 
 func main() {
 
-	var ko bool
+	var ko, fl_fullrank, fl_qr bool
 	flag.BoolVar(&ko, "knockoff", false, "Use knockoff method")
+	flag.BoolVar(&fl_fullrank, "fullrank", false, "Find maximal set of linearly independent columns")
+	flag.BoolVar(&fl_qr, "qr", false, "Use rank-revealing QR to drop redundant columns")
 	flag.Parse()
-
+	fmt.Printf("ko: %v\nfullrank: %v\nqr: %v\n", ko, fl_fullrank, fl_qr)
 	data = dstream.NewBCols("data", 100000).Done()
 	genvars()
 	data = center(data)
@@ -344,8 +405,8 @@ func main() {
 	}
 
 	l2w := []float64{0.05, 0.1, 0.2, 0.4, 0.8, 1.6}
-	for k := 0; k < 9; k++ {
-		err := ridge(k, l2w, ko)
+	for k := 4; k < 5; k++ {
+		err := ridge(k, l2w, ko, fl_fullrank, fl_qr)
 		if err != nil {
 			print(err)
 		}

@@ -18,9 +18,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kshedden/dstream/dstream"
-	"github.com/kshedden/gocols/config"
-	"github.com/kshedden/hfp/utils"
+	"github.com/brookluers/dstream/dstream"
+	"github.com/brookluers/gocols/config"
+	"github.com/brookluers/hfp/utils"
 )
 
 const (

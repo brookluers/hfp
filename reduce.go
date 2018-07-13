@@ -24,8 +24,8 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/kshedden/dimred"
-	"github.com/kshedden/hfp/utils"
+	"github.com/brookluers/dimred"
+	"github.com/brookluers/hfp/utils"
 )
 
 func doFactorize(nfac, npow int) (int, *mat.Dense, *mat.Dense) {
