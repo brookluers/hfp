@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/optimize"
 	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/optimize"
 
-	"github.com/brookluers/dstream/dstream"
 	"github.com/brookluers/dimred"
+	"github.com/brookluers/dstream/dstream"
 	"github.com/brookluers/dstream/formula"
 	"github.com/brookluers/duration"
 	"github.com/brookluers/statmodel"
@@ -31,11 +31,11 @@ func drugGroupMain(vnames, ee []string) []string {
 			// Omit these very rare categories
 			f := false
 			// BGL (6/21/18) TG_11 and TG_23 had zero variance, try excluding
-			for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
-				if x == fmt.Sprintf("TG_%d", y) {
-					f = true
-				}
-			}
+			// for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
+			//	if x == fmt.Sprintf("TG_%d", y) {
+			//		f = true
+			//	}
+			//}
 			if !f {
 				ee = append(ee, x)
 			}
@@ -50,11 +50,11 @@ func drugGroupInter(vnames, ee []string) []string {
 			// Omit these very rare categories
 			f := false
 			// BGL (6/21/18) TG_11 and TG_23 had zero variance, try excluding
-			for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
-				if x == fmt.Sprintf("TG_%d", y) {
-					f = true
-				}
-			}
+			//for _, y := range []int{5, 9, 11, 12, 14, 18, 19, 22, 23, 24} {
+			//	if x == fmt.Sprintf("TG_%d", y) {
+			//		f = true
+			//	}
+			//}
 			if !f {
 				ee = append(ee, x)
 				ee = append(ee, "Age*"+x)
@@ -108,7 +108,7 @@ func procGroupInter(vnames, ee []string) []string {
 	return ee
 }
 
-func modeldata(model int, fl_fullrank bool, fl_qr bool, ko bool) dstream.Dstream {
+func modeldata(model int, fl_save bool, fl_fullrank bool, fl_qr bool, ko bool) dstream.Dstream {
 
 	var base = []string{"Age", "Female", "Age*Female"}
 	var ee []string
@@ -145,51 +145,89 @@ func modeldata(model int, fl_fullrank bool, fl_qr bool, ko bool) dstream.Dstream
 
 	keep := []string{"Time", "HF", "Weight"}
 	// keep variables in dstream but not in formula
-	dx := formula.New(fml, data).Keep(keep).Done() 
+	dx := formula.New(fml, data).Keep(keep).Done()
 
 	fmt.Printf("\n---Variable names after formula parsing---%v\n\n", dx.Names())
-	
-	if fl_fullrank {
-	   lfn := "log_fr.txt"
-	   if fl_qr {
-	      strings.Replace(lfn, ".txt", "_qr.txt", 1)
-	   }
 
-	   if ko {
-	      strings.Replace(lfn, ".txt", "_ko.txt", 1)
-	   }
-	   var pcheck int
-	   var frcpr []float64
-	   if fl_qr {
-	      fmt.Printf("\n--Finding set of linearly independent columns using rank-revealing QR--\n")
-	      fr := dimred.NewRRQR(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
-	      pcheck = fr.DimCheck()
-	      frcpr = fr.CPR()
-	      dx = fr.Data()
-	   } else {
-	     fmt.Printf("\n--Finding set of linearly independent columns using Cholesky--\n")
-	     fr := dimred.NewFullRank(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
-	     pcheck = fr.DimCheck()
-	     frcpr = fr.CPR()
-	     dx = fr.Data()
-	   }
-	   
-	   gmat := mat.NewDense(pcheck, pcheck, frcpr)
-	   fmt.Printf("Upper corner of Gram matrix: %v\n\n",
-	   		       mat.Formatted(gmat, mat.Prefix(" "), mat.Excerpt(3)))
-	   
-	   var gsvd mat.SVD
-	   ok := gsvd.Factorize(gmat, mat.SVDNone)
-	   if (!ok) {
-	      fmt.Printf("Failed to compute SVD of gram matrix\n")
-	   } else {
-	     fmt.Printf("\nSingular values of gram matrix: %v\n", gsvd.Values(nil))
-	   }
-	   
-	   fmt.Printf("\n    Names of full-rank column set: \n%v\n", dx.Names())
+	if fl_fullrank {
+		lfn := "log_fr.txt"
+		if fl_qr {
+			lfn = strings.Replace(lfn, ".txt", "_qr.txt", 1)
+		}
+
+		if ko {
+			lfn = strings.Replace(lfn, ".txt", "_ko.txt", 1)
+		}
+		fmt.Printf("log file name = %v\n", lfn)
+		var pcheck int
+		var frcpr []float64
+		if fl_qr {
+			fmt.Printf("\n--Finding set of linearly independent columns using rank-revealing QR--\n")
+			fr := dimred.NewRRQR(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
+			pcheck = fr.DimCheck()
+			frcpr = fr.CPR()
+			dx = fr.Data()
+		} else {
+			fmt.Printf("\n--Finding set of linearly independent columns using Cholesky--\n")
+			fr := dimred.NewFullRank(dx).Keep("Time", "HF", "Weight").LogFile(lfn).Tol(1e-5).Done()
+			pcheck = fr.DimCheck()
+			frcpr = fr.CPR()
+			dx = fr.Data()
+		}
+
+		gmat := mat.NewDense(pcheck, pcheck, frcpr)
+		fmt.Printf("Upper corner of Gram matrix: %v\n\n",
+			mat.Formatted(gmat, mat.Prefix(" "), mat.Excerpt(3)))
+
+		var gsvd mat.SVD
+		ok := gsvd.Factorize(gmat, mat.SVDNone)
+		if !ok {
+			fmt.Printf("Failed to compute SVD of gram matrix\n")
+		} else {
+			fmt.Printf("\nSingular values of gram matrix: %v\n", gsvd.Values(nil))
+		}
+
+		fmt.Printf("\nNames of full-rank column set: \n%v\n", dx.Names())
+		fmt.Printf("\nNumber of (full-rank) columns: %v\n", len(dx.Names()))
 	}
 
 	da := dstream.MemCopy(dx)
+
+	if fl_save {
+		nrec := da.NumObs()
+		if nrec > 0 {
+			rand.Seed(718191)
+			rsavefunc := func(v map[string]interface{}, x interface{}) {
+				saveit := x.([]float64)
+				hf := v["HF"].([]float64)
+				for i := range hf {
+				     saveit[i] = rand.Float64()
+				}
+			}
+			saveProp := 0.05
+			filterSave := func(x interface{}, b []bool) bool {
+    				    v := x.([]float64)
+    				      var any bool
+				      for i := range v {
+			                  b[i] = v[i] < saveProp
+        			          any = any || !b[i]
+    				      }
+				      return any
+		        }
+			
+			da2 := dstream.Generate(da, "SaveRand", rsavefunc, "float64")
+			da2 = dstream.Filter(da2, map[string]dstream.FilterFunc{"SaveRand": filterSave})
+			
+			werr := dstream.ToCSV(da2).Filename(fmt.Sprintf("/scratch/stats_flux/luers/sample_model%v_p%v.txt", model, saveProp)).Done()
+			if werr != nil {
+			   fmt.Printf("Failed to write sample to disk\n%v", werr)
+			}
+
+
+		} else {
+			fmt.Printf("Could not save a sample, number of observations not known")
+		}
+	}
 
 	return da
 }
@@ -201,9 +239,73 @@ type rec struct {
 	kr          *statmodel.KnockoffResult
 }
 
-func ridge(mode int, l2w []float64, ko bool, fl_fullrank bool, fl_qr bool) error {
 
-	da := modeldata(mode, fl_fullrank, fl_qr, ko)
+func dropDrugs(da dstream.Dstream, dropProp float64) dstream.Dstream {
+     fmt.Printf("Dropping drug therapeutic groups with less than %v proportion of positive values\n", dropProp)
+     fmt.Printf("\nvariables: %v\n", da.Names())
+     var droptg []string
+     var dropvars []string
+     tgnpos := make(map[string]int)
+     da.Reset()
+     ntot := 0
+     fpos := func(r float64) bool {
+     	  return r > 0.0
+     }
+     for da.Next() {
+		for k, v := range da.Names() {
+		       if strings.HasPrefix(v, "TG_") {
+		       	  z := da.GetPos(k).([]float64)
+			  ntot += len(z)
+			  tgnpos[v] += floats.Count(fpos, z)
+		       }
+		}
+     }
+     
+     
+     for k, v := range tgnpos {
+     	 tgprop := float64(v) / float64(ntot)
+	 fmt.Printf("Drug: %v, Proportion of positive values: %v\n", k, tgprop)
+     	 if tgprop < dropProp {
+	    droptg = append(droptg, k)
+	 }
+     }
+     fmt.Printf("Dropping main effects and interactions for these drugs with very few 1's:\n%v\n", droptg)
+     
+     if len(droptg) > 0 {
+     	for _, v := range da.Names() {
+	    for _, tgname := range droptg {
+	    	// assuming no drug-drug interactions
+	    	if strings.Contains(v, tgname) {
+		   dropvars = append(dropvars, v)
+		}
+	    }
+	    
+	}
+	fmt.Printf("dropvars = %v\n", dropvars)
+	da = dstream.DropCols(da, dropvars...)
+     }
+     return da
+}
+
+func ridge(mode int, l2w []float64, ko bool, fl_save bool, fl_fullrank bool, fl_qr bool, dropDrugProp float64) error {
+
+	da := modeldata(mode, fl_save, fl_fullrank, fl_qr, ko)
+	
+	if mode == 3 || mode == 4 || mode == 7 || mode == 8 {
+	   da = dropDrugs(da, dropDrugProp)
+	   da.Reset()
+	   fmt.Printf("\nVariable names after dropping drug groups with low proportion of positive values: %v\n", da.Names())
+	   fmt.Printf("---Checking weight and Age columns after dropping some drugs---\n")
+	   chunknumber := 0
+	   for da.Next() {
+	       fmt.Printf("chunk number %v\n", chunknumber)
+	       chunknumber++
+	       aa := da.Get("Age").([]float64)
+	       ww := da.Get("Weight").([]float64)
+	       fmt.Printf("len(age) = %v, len(weight) = %v\n", len(aa), len(ww))
+	   }
+	   
+	}
 
 	if ko {
 		// Names to knockoff
@@ -244,13 +346,16 @@ func ridge(mode int, l2w []float64, ko bool, fl_fullrank bool, fl_qr bool) error
 			}
 
 			da.Reset()
-			dx := dstream.Shallow(da)
+			var dx dstream.Dstream
+			// dx := dstream.Shallow(da)
+			dx = da
 
 			model := duration.NewPHReg(dx, "Time", "HF").OptSettings(opt).L2Weight(l2wgt).Weight("Weight")
 			if !ko {
 				// With knockoff we are already using normed data
 				model = model.Norm()
 			}
+			fmt.Printf("Names inside PHReg: %v\n", model.DataSet().Names())
 			model = model.Done()
 			result, err := model.Fit()
 			if err != nil {
@@ -281,7 +386,10 @@ func ridge(mode int, l2w []float64, ko bool, fl_fullrank bool, fl_qr bool) error
 		fname = strings.Replace(fname, ".txt", "_ko.txt", 1)
 	}
 	if fl_fullrank {
-	   fname = strings.Replace(fname, ".txt", "_fullrank.txt", 1)
+		fname = strings.Replace(fname, ".txt", "_fullrank.txt", 1)
+	}
+	if fl_qr {
+		fname = strings.Replace(fname, ".txt", "_qr.txt", 1)
 	}
 
 	fid, err := os.Create(fname)
@@ -389,12 +497,13 @@ func genvars() {
 
 func main() {
 
-	var ko, fl_fullrank, fl_qr bool
+	var ko, fl_fullrank, fl_qr, fl_save bool
 	flag.BoolVar(&ko, "knockoff", false, "Use knockoff method")
+	flag.BoolVar(&fl_save, "save", false, "Save sample of records")
 	flag.BoolVar(&fl_fullrank, "fullrank", false, "Find maximal set of linearly independent columns")
 	flag.BoolVar(&fl_qr, "qr", false, "Use rank-revealing QR to drop redundant columns")
 	flag.Parse()
-	fmt.Printf("ko: %v\nfullrank: %v\nqr: %v\n", ko, fl_fullrank, fl_qr)
+	fmt.Printf("ko: %v\nfullrank: %v\nqr: %v\nsave records: %v\n", ko, fl_fullrank, fl_qr, fl_save)
 	data = dstream.NewBCols("data", 100000).Done()
 	genvars()
 	data = center(data)
@@ -403,10 +512,12 @@ func main() {
 	for k, v := range stats {
 		fmt.Printf("%-20s %f\n", k, v.SD)
 	}
-
+	dropDrugProp := 0.0001
+	// l2w := []float64{0.1} 
 	l2w := []float64{0.05, 0.1, 0.2, 0.4, 0.8, 1.6}
-	for k := 4; k < 5; k++ {
-		err := ridge(k, l2w, ko, fl_fullrank, fl_qr)
+	//fmt.Printf("Restricting to a single hyperparameter value\n")
+	for k := 4; k < 6; k++ {
+		err := ridge(k, l2w, ko, fl_save, fl_fullrank, fl_qr, dropDrugProp)
 		if err != nil {
 			print(err)
 		}
